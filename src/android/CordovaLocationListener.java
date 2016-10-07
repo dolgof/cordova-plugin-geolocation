@@ -8,13 +8,22 @@ import java.util.TimerTask;
 
 import org.apache.cordova.CallbackContext;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
 import android.os.Bundle;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
-public class CordovaLocationListener implements LocationListener {
+public class CordovaLocationListener implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener {
 
     public static int PERMISSION_DENIED = 1;
     public static int POSITION_UNAVAILABLE = 2;
@@ -29,21 +38,38 @@ public class CordovaLocationListener implements LocationListener {
     private Timer mTimer = null;
     private String TAG;
 
+    private GoogleApiClient mGoogleApiClient;
+    private Location mCurrentLocation;
+    private static final String CURRENT_LOCATION = "CURRENT_LOCATION";
+    private Boolean onConnectedCall=false;
+
+    // The location request used to poll for location updates if needed.
+    private static final LocationRequest REQUEST = LocationRequest.create()
+            .setInterval(10000) // 10 seconds
+            .setFastestInterval(16) // 16ms = 60fps
+            .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
     public CordovaLocationListener(Geolocation owner, String tag) {
         mOwner = owner;
         TAG = tag;
+        setUpLocationClientIfNeeded();
     }
 
-    @Override
-    public void onLocationChanged(Location location) {
-        Log.d(TAG, "The location has been updated!");
-        win(location);
+    public Location getLastKnownLocation(){
+        return mCurrentLocation;
     }
 
-    @Override
-    public void onProviderDisabled(String provider) {
-        if (LocationManager.GPS_PROVIDER.equals(provider)) {
-            fail(POSITION_UNAVAILABLE, "GPS provider has been disabled.");
+    private void setUpLocationClientIfNeeded() {
+        if (mGoogleApiClient == null) {
+            mGoogleApiClient = new GoogleApiClient.Builder(mOwner.cordova.getActivity())
+                    .addConnectionCallbacks(this)
+                    .addOnConnectionFailedListener(this)
+                    .addApi(LocationServices.API)
+                    .build();
+
+            if(!mGoogleApiClient.isConnected()){
+                mGoogleApiClient.connect();
+            }
         }
     }
 
@@ -81,6 +107,9 @@ public class CordovaLocationListener implements LocationListener {
         }
     }
 
+    /**
+     * Stop the Location Update
+     */
     public void destroy() {
         stop();
     }
@@ -122,12 +151,12 @@ public class CordovaLocationListener implements LocationListener {
     }
 
     private void start() {
-        mOwner.getLocationManager().requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+        startLocationUpdate();
     }
 
     private void stop() {
         cancelTimer();
-        mOwner.getLocationManager().removeUpdates(this);
+        stopLocationUpdate();
     }
 
     private void cancelTimer() {
@@ -138,13 +167,62 @@ public class CordovaLocationListener implements LocationListener {
         }
     }
 
+    @Override
+    public void onConnectionFailed(ConnectionResult arg0) {
+        // Do nothing
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        // Do nothing
+    }
+
+    /**
+     * Once Location client is connected we get the last known location to speed Up Process.
+     * Otherwise we ask for a location update. THe location updates is used just once to avoid
+     * battery drain.
+     */
+    @Override
+    public void onConnected(Bundle arg0) {
+        startLocationUpdate();
+    }
+
+    /**
+     * Start location Update
+     */
+    private void startLocationUpdate(){
+        int coarseLocationCheck = ContextCompat.checkSelfPermission(mOwner.cordova.getActivity(), Manifest.permission.ACCESS_COARSE_LOCATION);
+        int fineLocationCheck = ContextCompat.checkSelfPermission(mOwner.cordova.getActivity(), Manifest.permission.ACCESS_FINE_LOCATION);
+
+        if(PackageManager.PERMISSION_GRANTED == coarseLocationCheck || PackageManager.PERMISSION_GRANTED == fineLocationCheck) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, REQUEST, this);
+        }
+
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        Log.d(TAG, "The location has been updated!");
+        mCurrentLocation=location;
+        win(location);
+    }
+
+    /**
+     * Stop location updates
+     */
+    private void stopLocationUpdate(){
+        if(mGoogleApiClient.isConnected()){
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+        }
+    }
+
+
     private class LocationTimeoutTask extends TimerTask {
 
         private CallbackContext mCallbackContext = null;
         private CordovaLocationListener mListener = null;
 
-        public LocationTimeoutTask(CallbackContext callbackContext,
-                                   CordovaLocationListener listener) {
+        public LocationTimeoutTask(CallbackContext callbackContext, CordovaLocationListener listener) {
             mCallbackContext = callbackContext;
             mListener = listener;
         }
@@ -162,15 +240,5 @@ public class CordovaLocationListener implements LocationListener {
                 mListener.stop();
             }
         }
-    }
-
-    @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-        Log.d(TAG, "Provider " + provider + " status changed to " + status);
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-        Log.d(TAG, "Provider " + provider + " has been enabled.");
     }
 }

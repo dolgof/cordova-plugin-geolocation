@@ -21,6 +21,7 @@ package org.apache.cordova.geolocation;
 import android.content.pm.PackageManager;
 import android.Manifest;
 import android.os.Build;
+import android.location.Location;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaArgs;
@@ -30,6 +31,7 @@ import org.apache.cordova.PluginResult;
 import org.apache.cordova.LOG;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import javax.security.auth.callback.Callback;
 
@@ -37,6 +39,7 @@ public class Geolocation extends CordovaPlugin {
 
     String TAG = "GeolocationPlugin";
     CallbackContext context;
+    private CordovaLocationListener mListener;
 
     String [] permissions = { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION };
 
@@ -62,13 +65,29 @@ public class Geolocation extends CordovaPlugin {
         }
 
         if (action.equals("getCurrentPosition")) {
-            getCurrentPosition(args, callbackContext);
+            getLastLocation(args, callbackContext);
         } else if (action.equals("addWatch")) {
             addWatch(id, callbackContext);
         }
 
 
         return false;
+    }
+
+    /**
+     * Called when the activity is to be shut down. Stop listener.
+     */
+    public void onDestroy() {
+        if (mListener != null) {
+            mListener.destroy();
+        }
+    }
+
+    /**
+     * Called when the view navigates. Stop the listeners.
+     */
+    public void onReset() {
+        this.onDestroy();
     }
 
     public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) throws JSONException
@@ -101,6 +120,13 @@ public class Geolocation extends CordovaPlugin {
         return true;
     }
 
+    private CordovaLocationListener getListener() {
+        if (mListener == null) {
+            mListener = new CordovaLocationListener(this, TAG);
+        }
+        return mListener;
+    }
+
     /*
      * We override this so that we can access the permissions variable, which no longer exists in
      * the parent class, since we can't initialize it reliably in the constructor!
@@ -111,19 +137,107 @@ public class Geolocation extends CordovaPlugin {
         PermissionHelper.requestPermissions(this, requestCode, permissions);
     }
 
+    public JSONObject returnLocationJSON(Location loc) {
+        JSONObject o = new JSONObject();
+
+        try {
+            o.put("latitude", loc.getLatitude());
+            o.put("longitude", loc.getLongitude());
+            o.put("altitude", (loc.hasAltitude() ? loc.getAltitude() : null));
+            o.put("accuracy", loc.getAccuracy());
+            o.put("heading",
+                    (loc.hasBearing() ? (loc.hasSpeed() ? loc.getBearing()
+                            : null) : null));
+            o.put("velocity", loc.getSpeed());
+            o.put("timestamp", loc.getTime());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return o;
+    }
+
+    /**
+     * Get the Last Known Location from the LocationListenr.
+     * @param args
+     * @param callbackContext
+     */
+    private void getLastLocation(JSONArray args, CallbackContext callbackContext) {
+        int maximumAge;
+        try {
+            maximumAge = args.getInt(0);
+        } catch (JSONException e) {
+            e.printStackTrace();
+            maximumAge = 0;
+        }
+        Location last = getListener().getLastKnownLocation();
+        // Check if we can use lastKnownLocation to get a quick reading and use
+        // less battery
+        if (last != null && (System.currentTimeMillis() - last.getTime()) <= maximumAge) {
+            PluginResult result = new PluginResult(PluginResult.Status.OK, returnLocationJSON(last));
+            callbackContext.sendPluginResult(result);
+        } else {
+            getCurrentPosition(callbackContext, Integer.MAX_VALUE);
+        }
+    }
+
     // Get the current Position.
     private void getCurrentPosition(CallbackContext callbackContext, int timeout) {
-
+        getListener().addCallback(callbackContext, timeout);
     }
 
     // Add a Watch
     private void addWatch(String timerId, CallbackContext callbackContext) {
-
+        getListener().addWatch(timerId, callbackContext);
     }
 
     // Remove a watch
     private void clearWatch(String id) {
+        getListener().clearWatch(id);
+    }
 
+    /**
+     * Location Successfull.
+     *
+     * @param loc
+     * @param callbackContext
+     * @param keepCallback
+     */
+    public void win(Location loc, CallbackContext callbackContext, boolean keepCallback) {
+        PluginResult result = new PluginResult(PluginResult.Status.OK, this.returnLocationJSON(loc));
+        result.setKeepCallback(keepCallback);
+        callbackContext.sendPluginResult(result);
+    }
+
+    /**
+     * Location failed. Send error back to JavaScript.
+     *
+     * @param code
+     *            The error code
+     * @param msg
+     *            The error message
+     * @throws JSONException
+     */
+    public void fail(int code, String msg, CallbackContext callbackContext, boolean keepCallback) {
+        JSONObject obj = new JSONObject();
+        String backup = null;
+        try {
+            obj.put("code", code);
+            obj.put("message", msg);
+        } catch (JSONException e) {
+            obj = null;
+            backup = "{'code':" + code + ",'message':'"
+                    + msg.replaceAll("'", "\'") + "'}";
+        }
+        PluginResult result;
+        if (obj != null) {
+            result = new PluginResult(PluginResult.Status.ERROR, obj);
+        } else {
+            result = new PluginResult(PluginResult.Status.ERROR, backup);
+        }
+
+        result.setKeepCallback(keepCallback);
+        callbackContext.sendPluginResult(result);
     }
 
 }
