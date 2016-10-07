@@ -45,17 +45,24 @@
           </feature>
         </config-file>
 
-        <source-file src="src/android/Geolocation.java" target-dir="src/org/apache/cordova/geolocation/" />
-        <source-file src="src/android/CordovaLocationListener.java" target-dir="src/org/apache/cordova/geolocation/" />
+        <js-module src="www/Coordinates.js" name="Coordinates">
+            <clobbers target="Coordinates" />
+        </js-module>
 
+        <js-module src="www/PositionError.js" name="PositionError">
+            <clobbers target="PositionError" />
+        </js-module>
+
+        <js-module src="www/Position.js" name="Position">
+            <clobbers target="Position" />
+        </js-module>
+ 
         <js-module src="www/android/geolocation.js" name="geolocation">
             <clobbers target="navigator.geolocation" />
         </js-module>
 
-        <!-- We don't expose PositionError via clobber on Android as we use it internally only -->
-        <js-module src="www/PositionError.js" name="PositionError">
-            <runs />
-        </js-module>
+        <source-file src="src/android/CordovaLocationListener.java" target-dir="src/org/apache/cordova/geolocation/" />
+        <source-file src="src/android/Geolocation.java" target-dir="src/org/apache/cordova/geolocation/" />
 
     </platform>
 

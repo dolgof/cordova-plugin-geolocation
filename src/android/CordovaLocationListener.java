@@ -7,6 +7,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.LOG;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -86,6 +87,8 @@ public class CordovaLocationListener implements ConnectionCallbacks, OnConnectio
     }
 
     public void addCallback(CallbackContext callbackContext, int timeout) {
+        LOG.d(TAG,"timeout set to"+timeout);
+        
         if (mTimer == null) {
             mTimer = new Timer();
         }
@@ -151,7 +154,11 @@ public class CordovaLocationListener implements ConnectionCallbacks, OnConnectio
     }
 
     private void start() {
-        startLocationUpdate();
+        if(!mGoogleApiClient.isConnected()){
+                mGoogleApiClient.connect();
+        }else{
+             startLocationUpdate();
+        }
     }
 
     private void stop() {

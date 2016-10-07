@@ -33,6 +33,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import org.apache.cordova.CordovaInterface;
+import org.apache.cordova.CordovaWebView;
+
 import javax.security.auth.callback.Callback;
 
 public class Geolocation extends CordovaPlugin {
@@ -43,9 +46,15 @@ public class Geolocation extends CordovaPlugin {
 
     String [] permissions = { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION };
 
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        super.initialize(cordova, webView);
+        mListener = new CordovaLocationListener(this, TAG);
+        LOG.d(TAG,"Plugin Initialization Completed!!!");
+    }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        LOG.d(TAG, "We are entering execute");
+        LOG.d(TAG, "Geolocation.java We are entering execute........");
         context = callbackContext;
 
         if(!hasPermission()){
@@ -66,12 +75,13 @@ public class Geolocation extends CordovaPlugin {
 
         if (action.equals("getCurrentPosition")) {
             getLastLocation(args, callbackContext);
-        } else if (action.equals("addWatch")) {
+        } 
+        
+        if (action.equals("addWatch")) {
             addWatch(id, callbackContext);
         }
 
-
-        return false;
+        return true;
     }
 
     /**

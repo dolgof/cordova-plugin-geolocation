@@ -23,7 +23,8 @@ var argscheck = require('cordova/argscheck'),
 	utils = require('cordova/utils'),
 	exec = require('cordova/exec'),
 	PositionError = require('./PositionError'),
-	Position = require('./Position');
+	Position = require('./Position'),
+	Coordinates = require('./Coordinates');
 
 var timers = {}; // list of timers in use
 
@@ -63,7 +64,7 @@ function createTimeout(errorCallback, timeout) {
 	return t;
 }
 
-var Geolocation = {
+var geolocation = {
 	lastPosition: null, // reference to last known (cached) position returned
 	/**
 	 * Asynchronously acquires the current position.
@@ -83,6 +84,7 @@ var Geolocation = {
 		};
 
 		var win = function (p) {
+			console.log('inside getCurrentPosition.win callback ......');
 			clearTimeout(timeoutTimer.timer);
 			if (!(timeoutTimer.timer)) {
 				// Timeout already happened, or native fired error callback for
@@ -90,31 +92,29 @@ var Geolocation = {
 				// Don't continue with success callback.
 				return;
 			}
-			var pos = new Position({
-				latitude: p.latitude,
-				longitude: p.longitude,
-				altitude: p.altitude,
-				accuracy: p.accuracy,
-				heading: p.heading,
-				velocity: p.velocity,
-				altitudeAccuracy: p.altitudeAccuracy
-			}, (p.timestamp === undefined ? new Date() : ((p.timestamp instanceof Date) ? p.timestamp : new Date(p.timestamp))));
-			Geolocation.lastPosition = pos;
+			var coords = new Coordinates(p.latitude,p.longitude,p.altitude,p.accuracy,p.heading,p.velocity,null);
+			var pos = new Position(coords, (p.timestamp === undefined ? new Date() : ((p.timestamp instanceof Date) ? p.timestamp : new Date(p.timestamp))));
+			
+			geolocation.lastPosition = pos;
 			successCallback(pos);
 		};
 		var fail = function (e) {
+			console.log('inside getCurrentPostion.fail callback ......');
 			clearTimeout(timeoutTimer.timer);
 			timeoutTimer.timer = null;
+			console.log('error code '+e.code);
+			console.log('error message '+e.message);
+			
 			var err = new PositionError(e.code, e.message);
 			if (errorCallback) {
 				errorCallback(err);
 			}
 		};
 
-		// Check our cached position, if its timestamp difference with current time is less than the maximumAge, then just
+				// Check our cached position, if its timestamp difference with current time is less than the maximumAge, then just
 		// fire the success callback with the cached position.
-		if (Geolocation.lastPosition && options.maximumAge && (((new Date()).getTime() - Geolocation.lastPosition.timestamp.getTime()) <= options.maximumAge)) {
-			successCallback(Geolocation.lastPosition);
+		if (geolocation.lastPosition && options.maximumAge && (((new Date()).getTime() - geolocation.lastPosition.timestamp.getTime()) <= options.maximumAge)) {
+			successCallback(geolocation.lastPosition);
 			// If the cached position check failed and the timeout was set to 0, error out with a TIMEOUT error object.
 		} else if (options.timeout === 0) {
 			fail({
@@ -134,8 +134,11 @@ var Geolocation = {
 				// always truthy before we call into native
 				timeoutTimer.timer = true;
 			}
-			exec(win, fail, "Geolocation", "getCurrentPosition", [options.maximumAge]);
+			
+			console.log('before executing getCurrentPosition on native android component......');
+		    exec(win, fail, "Geolocation", "getCurrentPosition", [options.maximumAge]);
 		}
+
 		return timeoutTimer;
 	},
 	/**
@@ -154,7 +157,7 @@ var Geolocation = {
 		var id = utils.createUUID();
 
 		// Tell device to get a position ASAP, and also retrieve a reference to the timeout timer generated in getCurrentPosition
-		timers[id] = Geolocation.getCurrentPosition(successCallback, errorCallback, options);
+		timers[id] = geolocation.getCurrentPosition(successCallback, errorCallback, options);
 
 		var fail = function (e) {
 			clearTimeout(timers[id].timer);
@@ -178,7 +181,7 @@ var Geolocation = {
 				velocity: p.velocity,
 				altitudeAccuracy: p.altitudeAccuracy
 			}, (p.timestamp === undefined ? new Date() : ((p.timestamp instanceof Date) ? p.timestamp : new Date(p.timestamp))));
-			Geolocation.lastPosition = pos;
+			geolocation.lastPosition = pos;
 			successCallback(pos);
 		};
 
@@ -200,4 +203,4 @@ var Geolocation = {
 	}
 };
 
-module.exports = Geolocation;
+module.exports = geolocation;
