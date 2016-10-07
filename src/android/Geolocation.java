@@ -44,25 +44,34 @@ public class Geolocation extends CordovaPlugin {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         LOG.d(TAG, "We are entering execute");
         context = callbackContext;
-        if(action.equals("getPermission"))
-        {
-            if(hasPermisssion())
-            {
-                PluginResult r = new PluginResult(PluginResult.Status.OK);
-                context.sendPluginResult(r);
-                return true;
-            }
-            else {
-                PermissionHelper.requestPermissions(this, 0, permissions);
-            }
+
+        if(!hasPermission()){
+            PermissionHelper.requestPermissions(this, 0, permissions);
             return true;
         }
+
+        if (action == null || !action.matches("getCurrentPosition|addWatch|clearWatch")) {
+            return false;
+        }
+
+        final String id = args.optString(0, "");
+
+        if (action.equals("clearWatch")) {
+            clearWatch(id);
+            return true;
+        }
+
+        if (action.equals("getCurrentPosition")) {
+            getCurrentPosition(args, callbackContext);
+        } else if (action.equals("addWatch")) {
+            addWatch(id, callbackContext);
+        }
+
+
         return false;
     }
 
-
-    public void onRequestPermissionResult(int requestCode, String[] permissions,
-                                          int[] grantResults) throws JSONException
+    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) throws JSONException
     {
         PluginResult result;
         //This is important if we're using Cordova without using Cordova, but we have the geolocation plugin installed
@@ -81,7 +90,7 @@ public class Geolocation extends CordovaPlugin {
         }
     }
 
-    public boolean hasPermisssion() {
+    public boolean hasPermission() {
         for(String p : permissions)
         {
             if(!PermissionHelper.hasPermission(this, p))
@@ -102,6 +111,19 @@ public class Geolocation extends CordovaPlugin {
         PermissionHelper.requestPermissions(this, requestCode, permissions);
     }
 
+    // Get the current Position.
+    private void getCurrentPosition(CallbackContext callbackContext, int timeout) {
 
+    }
+
+    // Add a Watch
+    private void addWatch(String timerId, CallbackContext callbackContext) {
+
+    }
+
+    // Remove a watch
+    private void clearWatch(String id) {
+
+    }
 
 }
