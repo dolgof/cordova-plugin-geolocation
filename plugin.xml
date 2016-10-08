@@ -45,6 +45,8 @@
           </feature>
         </config-file>
 
+        <framework src="com.google.android.gms:play-services-location:+" />
+
         <js-module src="www/Coordinates.js" name="Coordinates">
             <clobbers target="Coordinates" />
         </js-module>
